@@ -359,6 +359,11 @@ h1 {
   font-weight: 800;
 }
 
+.schedule-actions {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
 .weekday-field {
   grid-column: span 3;
   min-width: 0;

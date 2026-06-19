@@ -759,9 +759,9 @@ function SchedulePage({
         </select>
       </div>
       <div className="schedule-grid">
-        <ScheduleList title="今日" occurrences={schedule.today} empty="今日の予定はありません" />
-        <ScheduleList title="明日" occurrences={schedule.tomorrow} empty="明日の予定はありません" />
-        <ScheduleList title="今週" occurrences={schedule.week} empty="今週の予定はありません" />
+        <ScheduleList title="今日" occurrences={schedule.today} empty="今日の予定はありません" onEdit={onEdit} onDelete={onDelete} />
+        <ScheduleList title="明日" occurrences={schedule.tomorrow} empty="明日の予定はありません" onEdit={onEdit} onDelete={onDelete} />
+        <ScheduleList title="今週" occurrences={schedule.week} empty="今週の予定はありません" onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="split-grid">
         <ItemSection title="定期予定" items={schedule.recurring} empty="定期予定はありません" onComplete={onComplete} onEdit={onEdit} onDelete={onDelete} />
@@ -911,7 +911,19 @@ function PageHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-function ScheduleList({ title, occurrences, empty }: { title: string; occurrences: ScheduleOccurrence[]; empty: string }) {
+function ScheduleList({
+  title,
+  occurrences,
+  empty,
+  onEdit,
+  onDelete,
+}: {
+  title: string;
+  occurrences: ScheduleOccurrence[];
+  empty: string;
+  onEdit: (item: Item) => void;
+  onDelete: (id: string) => void;
+}) {
   return (
     <section className="schedule-panel">
       <div className="panel-title">
@@ -928,6 +940,10 @@ function ScheduleList({ title, occurrences, empty }: { title: string; occurrence
             </div>
             <h3>{occurrence.item.title}</h3>
             <p>{formatDate(occurrence.date)}</p>
+            <div className="card-actions schedule-actions">
+              <button type="button" onClick={() => onEdit(occurrence.item)}>編集</button>
+              <button type="button" className="danger-button" onClick={() => onDelete(occurrence.item.id)}>削除</button>
+            </div>
           </article>
         ))}
         {!occurrences.length && <p className="empty">{empty}</p>}
