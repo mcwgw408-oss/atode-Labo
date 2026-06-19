@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 const STORAGE_KEY = "atode-labo-items";
+const ALL = "すべて";
 
 const categories = [
   "あとで読む",
@@ -12,10 +13,12 @@ const categories = [
   "その他",
 ] as const;
 
+const sources = ["Voicy", "Substack", "Threads", "note", "X", "その他"] as const;
 const priorities = ["高", "中", "低"] as const;
 const statuses = ["未対応", "対応中", "完了"] as const;
 
 type Category = (typeof categories)[number];
+type Source = (typeof sources)[number];
 type Priority = (typeof priorities)[number];
 type Status = (typeof statuses)[number];
 
@@ -23,6 +26,7 @@ type Item = {
   id: string;
   title: string;
   category: Category;
+  source: Source;
   memo: string;
   dateTime: string;
   deadline: string;
@@ -33,12 +37,12 @@ type Item = {
 };
 
 type Draft = Omit<Item, "id" | "createdAt" | "updatedAt">;
-
 type FilterRange = "all" | "today" | "week" | "deadline";
 
 const emptyDraft: Draft = {
   title: "",
   category: "あとで見る",
+  source: "その他",
   memo: "",
   dateTime: "",
   deadline: "",
@@ -58,11 +62,12 @@ const categoryTone: Record<Category, string> = {
 
 const sampleItems: Item[] = [
   {
-    id: "sample-voicy",
-    title: "朝のVoicyをあとで聞く",
-    category: "あとで聞く",
-    memo: "移動中に聞く",
-    dateTime: "",
+    id: "sample-note",
+    title: "noteで見てほしい記事を確認",
+    category: "あとで読む",
+    source: "note",
+    memo: "例: 6/19 11:00に見る、と日付・時間で指定できます",
+    dateTime: getDateInputValue(0, 11),
     deadline: "",
     priority: "中",
     status: "未対応",
@@ -70,13 +75,14 @@ const sampleItems: Item[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: "sample-live",
-    title: "ライブ配信予定を確認",
-    category: "ライブ・予定",
-    memo: "",
-    dateTime: getDateInputValue(1, 20),
+    id: "sample-voicy",
+    title: "朝のVoicyをあとで聞く",
+    category: "あとで聞く",
+    source: "Voicy",
+    memo: "移動中に聞く",
+    dateTime: "",
     deadline: "",
-    priority: "高",
+    priority: "低",
     status: "未対応",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -142,6 +148,7 @@ function normalizeImportedItems(value: unknown): Item[] {
       id: typeof entry.id === "string" ? entry.id : crypto.randomUUID(),
       title: typeof entry.title === "string" ? entry.title : "",
       category: categories.includes(entry.category as Category) ? (entry.category as Category) : "その他",
+      source: sources.includes(entry.source as Source) ? (entry.source as Source) : "その他",
       memo: typeof entry.memo === "string" ? entry.memo : "",
       dateTime: typeof entry.dateTime === "string" ? entry.dateTime : "",
       deadline: typeof entry.deadline === "string" ? entry.deadline : "",
@@ -159,8 +166,7 @@ export default function App() {
     if (!saved) return sampleItems;
 
     try {
-      const parsed = JSON.parse(saved);
-      const normalized = normalizeImportedItems(parsed);
+      const normalized = normalizeImportedItems(JSON.parse(saved));
       return normalized.length ? normalized : [];
     } catch {
       return [];
@@ -168,8 +174,9 @@ export default function App() {
   });
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<Category | "すべて">("すべて");
-  const [priorityFilter, setPriorityFilter] = useState<Priority | "すべて">("すべて");
+  const [categoryFilter, setCategoryFilter] = useState<Category | typeof ALL>(ALL);
+  const [sourceFilter, setSourceFilter] = useState<Source | typeof ALL>(ALL);
+  const [priorityFilter, setPriorityFilter] = useState<Priority | typeof ALL>(ALL);
   const [rangeFilter, setRangeFilter] = useState<FilterRange>("all");
   const [notice, setNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -219,17 +226,18 @@ export default function App() {
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      const matchesCategory = categoryFilter === "すべて" || item.category === categoryFilter;
-      const matchesPriority = priorityFilter === "すべて" || item.priority === priorityFilter;
+      const matchesCategory = categoryFilter === ALL || item.category === categoryFilter;
+      const matchesSource = sourceFilter === ALL || item.source === sourceFilter;
+      const matchesPriority = priorityFilter === ALL || item.priority === priorityFilter;
       const matchesRange =
         rangeFilter === "all" ||
         (rangeFilter === "today" && (isToday(item.dateTime) || isToday(item.deadline))) ||
         (rangeFilter === "week" && (isWithinDays(item.dateTime, 7) || isWithinDays(item.deadline, 7))) ||
         (rangeFilter === "deadline" && Boolean(item.deadline));
 
-      return matchesCategory && matchesPriority && matchesRange;
+      return matchesCategory && matchesSource && matchesPriority && matchesRange;
     });
-  }, [categoryFilter, items, priorityFilter, rangeFilter]);
+  }, [categoryFilter, items, priorityFilter, rangeFilter, sourceFilter]);
 
   function updateDraft<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -249,9 +257,7 @@ export default function App() {
     if (editingId) {
       setItems((current) =>
         current.map((item) =>
-          item.id === editingId
-            ? { ...item, ...draft, title, updatedAt: now }
-            : item,
+          item.id === editingId ? { ...item, ...draft, title, updatedAt: now } : item,
         ),
       );
       setNotice("更新しました");
@@ -285,15 +291,13 @@ export default function App() {
       },
       ...current,
     ]);
-    setNotice("1秒保存しました");
+    setNotice("タイトルだけ保存しました");
   }
 
   function completeItem(id: string) {
     setItems((current) =>
       current.map((item) =>
-        item.id === id
-          ? { ...item, status: "完了", updatedAt: new Date().toISOString() }
-          : item,
+        item.id === id ? { ...item, status: "完了", updatedAt: new Date().toISOString() } : item,
       ),
     );
   }
@@ -327,8 +331,7 @@ export default function App() {
     if (!file) return;
 
     try {
-      const text = await file.text();
-      const imported = normalizeImportedItems(JSON.parse(text));
+      const imported = normalizeImportedItems(JSON.parse(await file.text()));
       if (!imported.length) {
         setNotice("読み込めるデータがありませんでした");
         return;
@@ -349,7 +352,8 @@ export default function App() {
           <p className="eyebrow">あとで-Labo</p>
           <h1>流れていく情報を、いったん置いておく。</h1>
           <p>
-            細かい整理より、忘れないことを優先。タイトルだけでも保存できます。
+            Voicy、Substack、Threads、note、Xも選べます。日付・時間には「いつ見るか」
+            「いつ対応するか」を入れられます。
           </p>
         </div>
         <div className="hero-mark" aria-hidden="true">
@@ -370,12 +374,20 @@ export default function App() {
                 quickAdd(draft.title);
               }
             }}
-            placeholder="あとで見るものをここに置く"
+            placeholder="例: 11:00にnoteを見る、Threadsの人をあとで確認"
             autoFocus
           />
         </label>
 
         <div className="form-grid">
+          <label>
+            情報元
+            <select value={draft.source} onChange={(event) => updateDraft("source", event.target.value as Source)}>
+              {sources.map((source) => (
+                <option key={source}>{source}</option>
+              ))}
+            </select>
+          </label>
           <label>
             カテゴリ
             <select value={draft.category} onChange={(event) => updateDraft("category", event.target.value as Category)}>
@@ -401,8 +413,12 @@ export default function App() {
             </select>
           </label>
           <label>
-            日付・時間
-            <input type="datetime-local" value={draft.dateTime} onChange={(event) => updateDraft("dateTime", event.target.value)} />
+            見る・対応する日時
+            <input
+              type="datetime-local"
+              value={draft.dateTime}
+              onChange={(event) => updateDraft("dateTime", event.target.value)}
+            />
           </label>
           <label>
             締切
@@ -410,7 +426,11 @@ export default function App() {
           </label>
           <label className="memo-field">
             メモ
-            <textarea value={draft.memo} onChange={(event) => updateDraft("memo", event.target.value)} placeholder="リンク、ひとこと、思い出すためのメモ" />
+            <textarea
+              value={draft.memo}
+              onChange={(event) => updateDraft("memo", event.target.value)}
+              placeholder="リンク、ひとこと、思い出すためのメモ"
+            />
           </label>
         </div>
 
@@ -452,14 +472,20 @@ export default function App() {
         </div>
 
         <div className="filters">
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as Category | "すべて")}>
-            <option>すべて</option>
+          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as Source | typeof ALL)} aria-label="情報元フィルター">
+            <option>{ALL}</option>
+            {sources.map((source) => (
+              <option key={source}>{source}</option>
+            ))}
+          </select>
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as Category | typeof ALL)} aria-label="カテゴリフィルター">
+            <option>{ALL}</option>
             {categories.map((category) => (
               <option key={category}>{category}</option>
             ))}
           </select>
-          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as Priority | "すべて")}>
-            <option>すべて</option>
+          <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as Priority | typeof ALL)} aria-label="優先度フィルター">
+            <option>{ALL}</option>
             {priorities.map((priority) => (
               <option key={priority}>{priority}</option>
             ))}
@@ -546,11 +572,14 @@ function ItemCard({
   return (
     <article className={`item-card ${compact ? "compact-card" : ""}`}>
       <div className="item-main">
-        <span className={`category-chip ${categoryTone[item.category]}`}>{item.category}</span>
+        <div className="chip-row">
+          <span className="source-chip">{item.source}</span>
+          <span className={`category-chip ${categoryTone[item.category]}`}>{item.category}</span>
+        </div>
         <h3>{item.title}</h3>
         {!compact && item.memo && <p>{item.memo}</p>}
         <div className="meta-row">
-          {item.dateTime && <span>予定 {formatDate(item.dateTime)}</span>}
+          {item.dateTime && <span>見る日時 {formatDate(item.dateTime)}</span>}
           {item.deadline && <span>締切 {formatDate(item.deadline)}</span>}
           <span>優先度 {item.priority}</span>
           <span>{item.status}</span>
