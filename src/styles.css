@@ -179,6 +179,8 @@ h1 {
 
 .capture-panel,
 .dashboard-panel,
+.schedule-view,
+.schedule-panel,
 .library {
   border: 1px solid #e0d6c8;
   border-radius: 8px;
@@ -231,15 +233,87 @@ h1 {
   font-weight: 800;
 }
 
+.schedule-view {
+  margin: 18px 0;
+  padding: 16px;
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.schedule-panel,
+.dashboard-panel,
+.library {
+  padding: 16px;
+}
+
+.schedule-card {
+  padding: 13px;
+  border: 1px solid #e4dbce;
+  border-radius: 8px;
+  background: #fffdfa;
+}
+
+.schedule-card h3 {
+  margin: 0 0 5px;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.schedule-card p {
+  margin: 0;
+  color: #675f55;
+  font-weight: 800;
+}
+
+.weekday-field {
+  grid-column: span 3;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #d7cec0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffdfa;
+}
+
+.weekday-field legend {
+  padding: 0 4px;
+  color: #5f574e;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.weekday-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weekday-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid #ded4c5;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: #f7f1e9;
+  color: #2f2a24;
+  font-size: 0.86rem;
+}
+
+.weekday-toggle input {
+  width: auto;
+}
+
 .overview-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
-}
-
-.dashboard-panel,
-.library {
-  padding: 16px;
 }
 
 .wide-panel {
@@ -445,11 +519,13 @@ h1 {
   }
 
   .form-grid,
+  .schedule-grid,
   .overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .memo-field,
+  .weekday-field,
   .wide-panel {
     grid-column: span 2;
   }
@@ -471,12 +547,14 @@ h1 {
   }
 
   .form-grid,
+  .schedule-grid,
   .overview-grid,
   .item-card {
     grid-template-columns: 1fr;
   }
 
   .memo-field,
+  .weekday-field,
   .wide-panel {
     grid-column: auto;
   }

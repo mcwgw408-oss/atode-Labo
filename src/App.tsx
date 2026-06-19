@@ -16,11 +16,27 @@ const categories = [
 const sources = ["Voicy", "Substack", "Threads", "note", "X", "その他"] as const;
 const priorities = ["高", "中", "低"] as const;
 const statuses = ["未対応", "対応中", "完了"] as const;
+const scheduleModes = ["単発予定", "定期予定"] as const;
+const scheduleKinds = [
+  "ライブ配信",
+  "Voicy",
+  "Zoom",
+  "訪看",
+  "ヘルパー",
+  "企画締切",
+  "相談",
+  "その他",
+] as const;
+const repeatTypes = ["なし", "毎日", "毎週", "毎月", "任意曜日"] as const;
+const weekdays = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 type Category = (typeof categories)[number];
 type Source = (typeof sources)[number];
 type Priority = (typeof priorities)[number];
 type Status = (typeof statuses)[number];
+type ScheduleMode = (typeof scheduleModes)[number];
+type ScheduleKind = (typeof scheduleKinds)[number];
+type RepeatType = (typeof repeatTypes)[number];
 
 type Item = {
   id: string;
@@ -32,22 +48,36 @@ type Item = {
   deadline: string;
   priority: Priority;
   status: Status;
+  scheduleMode: ScheduleMode;
+  scheduleKind: ScheduleKind;
+  repeatType: RepeatType;
+  repeatWeekdays: number[];
   createdAt: string;
   updatedAt: string;
 };
 
 type Draft = Omit<Item, "id" | "createdAt" | "updatedAt">;
 type FilterRange = "all" | "today" | "week" | "deadline";
+type ScheduleOccurrence = {
+  id: string;
+  item: Item;
+  date: Date;
+  label: string;
+};
 
 const emptyDraft: Draft = {
   title: "",
-  category: "あとで見る",
+  category: "ライブ・予定",
   source: "その他",
   memo: "",
   dateTime: "",
   deadline: "",
   priority: "中",
   status: "未対応",
+  scheduleMode: "単発予定",
+  scheduleKind: "その他",
+  repeatType: "なし",
+  repeatWeekdays: [],
 };
 
 const categoryTone: Record<Category, string> = {
@@ -62,28 +92,28 @@ const categoryTone: Record<Category, string> = {
 
 const sampleItems: Item[] = [
   {
-    id: "sample-note",
-    title: "noteで見てほしい記事を確認",
-    category: "あとで読む",
-    source: "note",
-    memo: "例: 6/19 11:00に見る、と日付・時間で指定できます",
+    ...emptyDraft,
+    id: "sample-visit",
+    title: "訪問看護",
+    category: "ライブ・予定",
+    scheduleMode: "定期予定",
+    scheduleKind: "訪看",
+    repeatType: "毎週",
     dateTime: getDateInputValue(0, 11),
-    deadline: "",
-    priority: "中",
-    status: "未対応",
+    priority: "高",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
   {
-    id: "sample-voicy",
-    title: "朝のVoicyをあとで聞く",
-    category: "あとで聞く",
-    source: "Voicy",
-    memo: "移動中に聞く",
-    dateTime: "",
-    deadline: "",
-    priority: "低",
-    status: "未対応",
+    ...emptyDraft,
+    id: "sample-note",
+    title: "noteで見てほしい記事を確認",
+    category: "あとで読む",
+    source: "note",
+    scheduleMode: "単発予定",
+    scheduleKind: "その他",
+    memo: "日付・時間に入れると、今日/明日/今週に出ます",
+    dateTime: getDateInputValue(0, 11),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -109,16 +139,25 @@ function startOfToday() {
   return date;
 }
 
-function endOfDay(daysFromToday: number) {
+function startOfDay(offsetDays: number) {
   const date = startOfToday();
-  date.setDate(date.getDate() + daysFromToday);
+  date.setDate(date.getDate() + offsetDays);
+  return date;
+}
+
+function endOfDay(offsetDays: number) {
+  const date = startOfDay(offsetDays);
   date.setHours(23, 59, 59, 999);
   return date;
 }
 
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 function isToday(value: string) {
   const date = parseLocalDate(value);
-  return Boolean(date && date >= startOfToday() && date <= endOfDay(0));
+  return Boolean(date && isSameDay(date, startOfToday()));
 }
 
 function isWithinDays(value: string, days: number) {
@@ -126,16 +165,67 @@ function isWithinDays(value: string, days: number) {
   return Boolean(date && date >= startOfToday() && date <= endOfDay(days));
 }
 
-function formatDate(value: string) {
-  const date = parseLocalDate(value);
+function setTimeFromBase(date: Date, base: Date) {
+  const next = new Date(date);
+  next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+  return next;
+}
+
+function formatDate(value: string | Date) {
+  const date = typeof value === "string" ? parseLocalDate(value) : value;
   if (!date) return "";
   return new Intl.DateTimeFormat("ja-JP", {
     month: "numeric",
     day: "numeric",
     weekday: "short",
-    hour: value.includes("T") ? "2-digit" : undefined,
-    minute: value.includes("T") ? "2-digit" : undefined,
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date);
+}
+
+function getScheduleDate(item: Item) {
+  return parseLocalDate(item.dateTime) || parseLocalDate(item.deadline);
+}
+
+function isScheduled(item: Item) {
+  return Boolean(item.dateTime || item.deadline || item.scheduleMode === "定期予定");
+}
+
+function createOccurrence(item: Item, date: Date, label: string): ScheduleOccurrence {
+  return {
+    id: `${item.id}-${date.toISOString()}`,
+    item,
+    date,
+    label,
+  };
+}
+
+function getOccurrences(item: Item, days = 7): ScheduleOccurrence[] {
+  const base = getScheduleDate(item);
+  if (!base || item.status === "完了") return [];
+
+  if (item.scheduleMode === "単発予定" || item.repeatType === "なし") {
+    return base >= startOfToday() && base <= endOfDay(days)
+      ? [createOccurrence(item, base, "単発")]
+      : [];
+  }
+
+  const occurrences: ScheduleOccurrence[] = [];
+  for (let offset = 0; offset <= days; offset += 1) {
+    const date = startOfDay(offset);
+    const weekday = date.getDay();
+    const dayMatches =
+      item.repeatType === "毎日" ||
+      (item.repeatType === "毎週" && weekday === base.getDay()) ||
+      (item.repeatType === "毎月" && date.getDate() === base.getDate()) ||
+      (item.repeatType === "任意曜日" && item.repeatWeekdays.includes(weekday));
+
+    if (dayMatches) {
+      occurrences.push(createOccurrence(item, setTimeFromBase(date, base), item.repeatType));
+    }
+  }
+
+  return occurrences;
 }
 
 function normalizeImportedItems(value: unknown): Item[] {
@@ -154,6 +244,18 @@ function normalizeImportedItems(value: unknown): Item[] {
       deadline: typeof entry.deadline === "string" ? entry.deadline : "",
       priority: priorities.includes(entry.priority as Priority) ? (entry.priority as Priority) : "中",
       status: statuses.includes(entry.status as Status) ? (entry.status as Status) : "未対応",
+      scheduleMode: scheduleModes.includes(entry.scheduleMode as ScheduleMode)
+        ? (entry.scheduleMode as ScheduleMode)
+        : "単発予定",
+      scheduleKind: scheduleKinds.includes(entry.scheduleKind as ScheduleKind)
+        ? (entry.scheduleKind as ScheduleKind)
+        : "その他",
+      repeatType: repeatTypes.includes(entry.repeatType as RepeatType)
+        ? (entry.repeatType as RepeatType)
+        : "なし",
+      repeatWeekdays: Array.isArray(entry.repeatWeekdays)
+        ? entry.repeatWeekdays.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6)
+        : [],
       createdAt: typeof entry.createdAt === "string" ? entry.createdAt : now,
       updatedAt: now,
     }))
@@ -186,43 +288,37 @@ export default function App() {
   }, [items]);
 
   const activeItems = useMemo(() => items.filter((item) => item.status !== "完了"), [items]);
+  const scheduleOccurrences = useMemo(
+    () => activeItems.flatMap((item) => getOccurrences(item, 7)).sort((a, b) => a.date.getTime() - b.date.getTime()),
+    [activeItems],
+  );
+
+  const todaySchedule = useMemo(
+    () => scheduleOccurrences.filter((occurrence) => isSameDay(occurrence.date, startOfDay(0))),
+    [scheduleOccurrences],
+  );
+  const tomorrowSchedule = useMemo(
+    () => scheduleOccurrences.filter((occurrence) => isSameDay(occurrence.date, startOfDay(1))),
+    [scheduleOccurrences],
+  );
+  const weekSchedule = useMemo(
+    () => scheduleOccurrences.filter((occurrence) => occurrence.date >= startOfToday() && occurrence.date <= endOfDay(7)),
+    [scheduleOccurrences],
+  );
 
   const todayItems = useMemo(
     () => activeItems.filter((item) => isToday(item.dateTime) || isToday(item.deadline)),
     [activeItems],
   );
-
-  const upcomingItems = useMemo(
-    () =>
-      activeItems
-        .filter((item) => isWithinDays(item.dateTime, 7) && !isToday(item.dateTime))
-        .sort((a, b) => a.dateTime.localeCompare(b.dateTime)),
-    [activeItems],
-  );
-
   const urgentDeadlines = useMemo(
-    () =>
-      activeItems
-        .filter((item) => isWithinDays(item.deadline, 7))
-        .sort((a, b) => a.deadline.localeCompare(b.deadline)),
+    () => activeItems.filter((item) => isWithinDays(item.deadline, 7)).sort((a, b) => a.deadline.localeCompare(b.deadline)),
     [activeItems],
   );
-
   const laterItems = useMemo(
-    () =>
-      activeItems.filter(
-        (item) =>
-          item.category.startsWith("あとで") &&
-          !isToday(item.dateTime) &&
-          !isToday(item.deadline),
-      ),
+    () => activeItems.filter((item) => item.category.startsWith("あとで") && !isScheduled(item)),
     [activeItems],
   );
-
-  const unresolvedItems = useMemo(
-    () => items.filter((item) => item.status === "未対応"),
-    [items],
-  );
+  const unresolvedItems = useMemo(() => items.filter((item) => item.status === "未対応"), [items]);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -232,7 +328,7 @@ export default function App() {
       const matchesRange =
         rangeFilter === "all" ||
         (rangeFilter === "today" && (isToday(item.dateTime) || isToday(item.deadline))) ||
-        (rangeFilter === "week" && (isWithinDays(item.dateTime, 7) || isWithinDays(item.deadline, 7))) ||
+        (rangeFilter === "week" && getOccurrences(item, 7).length > 0) ||
         (rangeFilter === "deadline" && Boolean(item.deadline));
 
       return matchesCategory && matchesSource && matchesPriority && matchesRange;
@@ -240,7 +336,26 @@ export default function App() {
   }, [categoryFilter, items, priorityFilter, rangeFilter, sourceFilter]);
 
   function updateDraft<K extends keyof Draft>(key: K, value: Draft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "scheduleMode" && value === "単発予定") {
+        next.repeatType = "なし";
+        next.repeatWeekdays = [];
+      }
+      if (key === "scheduleMode" && value === "定期予定" && next.repeatType === "なし") {
+        next.repeatType = "毎週";
+      }
+      return next;
+    });
+  }
+
+  function toggleWeekday(day: number) {
+    setDraft((current) => ({
+      ...current,
+      repeatWeekdays: current.repeatWeekdays.includes(day)
+        ? current.repeatWeekdays.filter((value) => value !== day)
+        : [...current.repeatWeekdays, day].sort(),
+    }));
   }
 
   function resetForm() {
@@ -254,19 +369,23 @@ export default function App() {
     if (!title) return;
 
     const now = new Date().toISOString();
+    const cleanedDraft = {
+      ...draft,
+      title,
+      repeatType: draft.scheduleMode === "単発予定" ? "なし" : draft.repeatType,
+      repeatWeekdays: draft.repeatType === "任意曜日" ? draft.repeatWeekdays : [],
+    };
+
     if (editingId) {
       setItems((current) =>
-        current.map((item) =>
-          item.id === editingId ? { ...item, ...draft, title, updatedAt: now } : item,
-        ),
+        current.map((item) => (item.id === editingId ? { ...item, ...cleanedDraft, updatedAt: now } : item)),
       );
       setNotice("更新しました");
     } else {
       setItems((current) => [
         {
-          ...draft,
+          ...cleanedDraft,
           id: crypto.randomUUID(),
-          title,
           createdAt: now,
           updatedAt: now,
         },
@@ -296,9 +415,7 @@ export default function App() {
 
   function completeItem(id: string) {
     setItems((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, status: "完了", updatedAt: new Date().toISOString() } : item,
-      ),
+      current.map((item) => (item.id === id ? { ...item, status: "完了", updatedAt: new Date().toISOString() } : item)),
     );
   }
 
@@ -350,10 +467,9 @@ export default function App() {
       <section className="hero-band">
         <div className="hero-copy">
           <p className="eyebrow">あとで-Labo</p>
-          <h1>流れていく情報を、いったん置いておく。</h1>
+          <h1>近日中に何があるか、ぱっと見えるように。</h1>
           <p>
-            Voicy、Substack、Threads、note、Xも選べます。日付・時間には「いつ見るか」
-            「いつ対応するか」を入れられます。
+            単発予定と定期予定を分けて保存できます。毎日・毎週・毎月・任意曜日の繰り返しを設定できます。
           </p>
         </div>
         <div className="hero-mark" aria-hidden="true">
@@ -374,12 +490,40 @@ export default function App() {
                 quickAdd(draft.title);
               }
             }}
-            placeholder="例: 11:00にnoteを見る、Threadsの人をあとで確認"
+            placeholder="例: 訪問看護、Zoom相談、金曜のVoicy"
             autoFocus
           />
         </label>
 
         <div className="form-grid">
+          <label>
+            予定
+            <select value={draft.scheduleMode} onChange={(event) => updateDraft("scheduleMode", event.target.value as ScheduleMode)}>
+              {scheduleModes.map((mode) => (
+                <option key={mode}>{mode}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            種別
+            <select value={draft.scheduleKind} onChange={(event) => updateDraft("scheduleKind", event.target.value as ScheduleKind)}>
+              {scheduleKinds.map((kind) => (
+                <option key={kind}>{kind}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            繰り返し
+            <select
+              value={draft.repeatType}
+              disabled={draft.scheduleMode === "単発予定"}
+              onChange={(event) => updateDraft("repeatType", event.target.value as RepeatType)}
+            >
+              {repeatTypes.map((repeat) => (
+                <option key={repeat}>{repeat}</option>
+              ))}
+            </select>
+          </label>
           <label>
             情報元
             <select value={draft.source} onChange={(event) => updateDraft("source", event.target.value as Source)}>
@@ -413,23 +557,32 @@ export default function App() {
             </select>
           </label>
           <label>
-            見る・対応する日時
-            <input
-              type="datetime-local"
-              value={draft.dateTime}
-              onChange={(event) => updateDraft("dateTime", event.target.value)}
-            />
+            日付・時間
+            <input type="datetime-local" value={draft.dateTime} onChange={(event) => updateDraft("dateTime", event.target.value)} />
           </label>
           <label>
             締切
             <input type="date" value={draft.deadline} onChange={(event) => updateDraft("deadline", event.target.value)} />
           </label>
+          {draft.scheduleMode === "定期予定" && draft.repeatType === "任意曜日" && (
+            <fieldset className="weekday-field">
+              <legend>曜日</legend>
+              <div className="weekday-row">
+                {weekdays.map((label, day) => (
+                  <label key={label} className="weekday-toggle">
+                    <input type="checkbox" checked={draft.repeatWeekdays.includes(day)} onChange={() => toggleWeekday(day)} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <label className="memo-field">
             メモ
             <textarea
               value={draft.memo}
               onChange={(event) => updateDraft("memo", event.target.value)}
-              placeholder="リンク、ひとこと、思い出すためのメモ"
+              placeholder="リンク、補足、思い出すためのメモ"
             />
           </label>
         </div>
@@ -450,9 +603,22 @@ export default function App() {
         </div>
       </form>
 
+      <section className="schedule-view">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">予定</p>
+            <h2>近日予定</h2>
+          </div>
+        </div>
+        <div className="schedule-grid">
+          <ScheduleList title="今日" occurrences={todaySchedule} empty="今日の予定はありません" />
+          <ScheduleList title="明日" occurrences={tomorrowSchedule} empty="明日の予定はありません" />
+          <ScheduleList title="今週" occurrences={weekSchedule} empty="今週の予定はありません" />
+        </div>
+      </section>
+
       <section className="overview-grid" aria-label="トップ画面">
-        <DashboardList title="今日見るもの" items={todayItems} empty="今日の予定は空です" onComplete={completeItem} onEdit={editItem} onDelete={deleteItem} />
-        <DashboardList title="近日予定" items={upcomingItems} empty="近日予定はありません" onComplete={completeItem} onEdit={editItem} onDelete={deleteItem} />
+        <DashboardList title="今日見るもの" items={todayItems} empty="今日見るものは空です" onComplete={completeItem} onEdit={editItem} onDelete={deleteItem} />
         <DashboardList title="締切が近いもの" items={urgentDeadlines} empty="近い締切はありません" onComplete={completeItem} onEdit={editItem} onDelete={deleteItem} />
         <DashboardList title="あとで見るもの" items={laterItems} empty="あとで箱は空です" onComplete={completeItem} onEdit={editItem} onDelete={deleteItem} />
         <DashboardList title="未対応一覧" items={unresolvedItems} empty="未対応はありません" onComplete={completeItem} onEdit={editItem} onDelete={deleteItem} wide />
@@ -523,6 +689,41 @@ export default function App() {
   );
 }
 
+function ScheduleList({
+  title,
+  occurrences,
+  empty,
+}: {
+  title: string;
+  occurrences: ScheduleOccurrence[];
+  empty: string;
+}) {
+  return (
+    <section className="schedule-panel">
+      <div className="panel-title">
+        <h2>{title}</h2>
+        <span>{occurrences.length}</span>
+      </div>
+      <div className="mini-list">
+        {occurrences.slice(0, 8).map((occurrence) => (
+          <article key={occurrence.id} className="schedule-card">
+            <div>
+              <div className="chip-row">
+                <span className="source-chip">{occurrence.item.scheduleKind}</span>
+                <span className="category-chip">{occurrence.item.scheduleMode}</span>
+                {occurrence.item.scheduleMode === "定期予定" && <span className="category-chip">{occurrence.label}</span>}
+              </div>
+              <h3>{occurrence.item.title}</h3>
+              <p>{formatDate(occurrence.date)}</p>
+            </div>
+          </article>
+        ))}
+        {!occurrences.length && <p className="empty">{empty}</p>}
+      </div>
+    </section>
+  );
+}
+
 function DashboardList({
   title,
   items,
@@ -575,11 +776,13 @@ function ItemCard({
         <div className="chip-row">
           <span className="source-chip">{item.source}</span>
           <span className={`category-chip ${categoryTone[item.category]}`}>{item.category}</span>
+          {isScheduled(item) && <span className="category-chip">{item.scheduleKind}</span>}
+          {item.scheduleMode === "定期予定" && <span className="category-chip">{item.repeatType}</span>}
         </div>
         <h3>{item.title}</h3>
         {!compact && item.memo && <p>{item.memo}</p>}
         <div className="meta-row">
-          {item.dateTime && <span>見る日時 {formatDate(item.dateTime)}</span>}
+          {item.dateTime && <span>日時 {formatDate(item.dateTime)}</span>}
           {item.deadline && <span>締切 {formatDate(item.deadline)}</span>}
           <span>優先度 {item.priority}</span>
           <span>{item.status}</span>
