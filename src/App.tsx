@@ -38,6 +38,7 @@ type Item = {
   title: string;
   category: Category;
   source: Source;
+  url: string;
   memo: string;
   dateTime: string;
   deadline: string;
@@ -63,6 +64,7 @@ const emptyDraft: Draft = {
   title: "",
   category: "あとで見る",
   source: "その他",
+  url: "",
   memo: "",
   dateTime: "",
   deadline: "",
@@ -239,6 +241,7 @@ function normalizeImportedItems(value: unknown): Item[] {
       title: typeof entry.title === "string" ? entry.title : "",
       category: categories.includes(entry.category as Category) ? (entry.category as Category) : "その他",
       source: sources.includes(entry.source as Source) ? (entry.source as Source) : "その他",
+      url: typeof entry.url === "string" ? entry.url : "",
       memo: typeof entry.memo === "string" ? entry.memo : "",
       dateTime: typeof entry.dateTime === "string" ? entry.dateTime : "",
       deadline: typeof entry.deadline === "string" ? entry.deadline : "",
@@ -344,7 +347,7 @@ export default function App() {
       .filter((item) => {
         const matchesQuery =
           !normalizedQuery ||
-          `${item.title} ${item.memo} ${item.source} ${item.category} ${item.scheduleKind}`.toLowerCase().includes(normalizedQuery);
+          `${item.title} ${item.url} ${item.memo} ${item.source} ${item.category} ${item.scheduleKind}`.toLowerCase().includes(normalizedQuery);
         const matchesCategory = categoryFilter === ALL || item.category === categoryFilter;
         const matchesSource = sourceFilter === ALL || item.source === sourceFilter;
         const matchesPriority = priorityFilter === ALL || item.priority === priorityFilter;
@@ -691,6 +694,10 @@ function CapturePage({
         <SelectField label="カテゴリ" value={draft.category} options={categories} onChange={(value) => onUpdate("category", value as Category)} />
         <SelectField label="優先度" value={draft.priority} options={priorities} onChange={(value) => onUpdate("priority", value as Priority)} />
         <SelectField label="状態" value={draft.status} options={statuses} onChange={(value) => onUpdate("status", value as Status)} />
+        <label className="url-field">
+          URL
+          <input type="url" value={draft.url} onChange={(event) => onUpdate("url", event.target.value)} placeholder="https://..." />
+        </label>
         <label>
           日付・時間
           <input type="datetime-local" value={draft.dateTime} onChange={(event) => onUpdate("dateTime", event.target.value)} />
@@ -1006,6 +1013,11 @@ function ItemCard({
           {item.scheduleMode === "定期予定" && <span className="category-chip">{item.repeatType}</span>}
         </div>
         <h3>{item.title}</h3>
+        {!compact && item.url && (
+          <a className="item-link" href={item.url} target="_blank" rel="noreferrer">
+            URLを開く
+          </a>
+        )}
         {!compact && item.memo && <p>{item.memo}</p>}
         <div className="meta-row">
           {item.dateTime && <span>日時 {formatDate(item.dateTime)}</span>}

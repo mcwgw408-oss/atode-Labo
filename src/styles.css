@@ -212,6 +212,10 @@ h1 {
   grid-column: span 2;
 }
 
+.url-field {
+  grid-column: span 2;
+}
+
 .actions-row,
 .data-actions,
 .filters,
@@ -563,6 +567,19 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.item-link {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: #286979;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.item-link:hover {
+  text-decoration: underline;
+}
+
 .meta-row {
   color: #70675c;
   font-size: 0.8rem;
@@ -621,6 +638,7 @@ h1 {
   }
 
   .memo-field,
+  .url-field,
   .weekday-field,
   .wide-panel {
     grid-column: span 2;
@@ -653,6 +671,7 @@ h1 {
   }
 
   .memo-field,
+  .url-field,
   .weekday-field,
   .wide-panel {
     grid-column: auto;
