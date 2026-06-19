@@ -181,7 +181,8 @@ h1 {
 .dashboard-panel,
 .schedule-view,
 .schedule-panel,
-.library {
+.library,
+.page-section {
   border: 1px solid #e0d6c8;
   border-radius: 8px;
   background: rgba(255, 253, 250, 0.92);
@@ -231,6 +232,94 @@ h1 {
 .notice {
   color: #286979;
   font-weight: 800;
+}
+
+.page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+  padding: 8px;
+  border: 1px solid #e0d6c8;
+  border-radius: 8px;
+  background: rgba(255, 253, 250, 0.82);
+}
+
+.page-tabs button {
+  flex: 1 1 120px;
+}
+
+.page-tabs button.active {
+  border-color: #286979;
+  color: #fffdfa;
+  background: #286979;
+}
+
+.home-dashboard,
+.page-section {
+  display: grid;
+  gap: 14px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.metric-card {
+  display: grid;
+  min-height: 116px;
+  align-content: center;
+  justify-items: start;
+  border-radius: 8px;
+  padding: 18px;
+  text-align: left;
+  background: #fffdfa;
+}
+
+.metric-card span {
+  color: #675f55;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.metric-card strong {
+  color: #286979;
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.home-grid,
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.count-list {
+  display: grid;
+  gap: 8px;
+}
+
+.count-list button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44px;
+  text-align: left;
+}
+
+.page-section {
+  padding: 16px;
+}
+
+.page-segmented {
+  margin-bottom: 14px;
+}
+
+.search-input {
+  width: min(260px, 100%);
 }
 
 .schedule-view {
@@ -519,6 +608,8 @@ h1 {
   }
 
   .form-grid,
+  .home-grid,
+  .split-grid,
   .schedule-grid,
   .overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -547,6 +638,9 @@ h1 {
   }
 
   .form-grid,
+  .summary-grid,
+  .home-grid,
+  .split-grid,
   .schedule-grid,
   .overview-grid,
   .item-card {
@@ -569,6 +663,7 @@ h1 {
   }
 
   .filters select,
+  .search-input,
   .data-actions button,
   .actions-row button {
     width: 100%;
